@@ -23,6 +23,9 @@ instance Arbitrary Suit where
 generateCard :: Gen Card
 generateCard = elements allCards
 
+generateHand :: Gen Hand
+generateHand = vectorOf 5 generateCard
+
 instance Arbitrary Card where 
     arbitrary = generateCard
 
@@ -31,6 +34,9 @@ removeElementsFrom elements withoutElements = filter (\e -> not $ any (e ==) wit
 
 generateCardWithout :: [Card] -> Gen Card
 generateCardWithout withoutCards = elements $ removeElementsFrom allCards withoutCards
+
+generateHandWithout :: [Card] -> Gen Hand
+generateHandWithout withoutCards = vectorOf 5 (generateCardWithout withoutCards)
 
 generateCardAtRankWithoutSuits :: Rank -> [Suit] -> [Card]
 generateCardAtRankWithoutSuits rank withoutSuits = [Card rank suit | suit <- removeElementsFrom allSuits withoutSuits]

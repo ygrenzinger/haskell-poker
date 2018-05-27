@@ -89,19 +89,19 @@ findStraightFlush hand = do
     straightRank <- findStraight hand
     return (flushSuit, straightRank)
 
-data HandCategory = OnePair | TwoPair | ThreeOfAKind | Straight | Flush | FullHouse | FourOfAKind | StraightFlush deriving (Show, Eq, Ord, Enum, Bounded)
+data HandCategory = None | OnePair | TwoPair | ThreeOfAKind | Straight | Flush | FullHouse | FourOfAKind | StraightFlush deriving (Show, Eq, Ord, Enum, Bounded)
 
-findFigure :: Hand -> Maybe HandCategory
-findFigure hand 
-    | isJust $ findStraightFlush hand = Just StraightFlush
-    | isJust $ findFourOfAKind hand = Just FourOfAKind
-    | isJust $ findFullHouse hand = Just FullHouse
-    | isJust $ findFlush hand = Just Flush
-    | isJust $ findStraight hand = Just Straight
-    | isJust $ findThreeOfAKind hand = Just ThreeOfAKind
-    | isJust $ findTwoPair hand = Just TwoPair
-    | isJust $ findOnePair hand = Just OnePair
-    | otherwise = Nothing
+handCategory :: Hand -> HandCategory
+handCategory hand 
+    | isJust $ findStraightFlush hand = StraightFlush
+    | isJust $ findFourOfAKind hand = FourOfAKind
+    | isJust $ findFullHouse hand = FullHouse
+    | isJust $ findFlush hand = Flush
+    | isJust $ findStraight hand = Straight
+    | isJust $ findThreeOfAKind hand = ThreeOfAKind
+    | isJust $ findTwoPair hand = TwoPair
+    | isJust $ findOnePair hand = OnePair
+    | otherwise = None
 
 -- computeHandValue :: Figure -> Hand -> (String, Int)
 -- computeHandValue f@None hand = (show f, 0)
@@ -114,6 +114,11 @@ findFigure hand
 -- computeHandValue f@FourOfAKind hand = (show f, 10^8)
 -- computeHandValue f@StraightFlush hand = (show f, 10^9)
 
-compareHand :: Hand -> Hand -> Maybe String
-compareHand h1 h2 = Nothing
+data Player = Player1 Hand | Player2 Hand deriving (Eq)
+instance Show Player where
+    show (Player1 hand) = "Player 1 with hand " ++ show hand
+    show (Player2 hand) = "Player 2 with hand " ++ show hand 
+
+findWinner :: Player -> Player -> Maybe (Player, String)
+findWinner h1 h2 = Nothing
 
