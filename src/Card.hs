@@ -114,11 +114,18 @@ handCategory hand
 -- computeHandValue f@FourOfAKind hand = (show f, 10^8)
 -- computeHandValue f@StraightFlush hand = (show f, 10^9)
 
-data Player = Player1 Hand | Player2 Hand deriving (Eq)
+data Player = Player String Hand deriving (Eq)
 instance Show Player where
-    show (Player1 hand) = "Player 1 with hand " ++ show hand
-    show (Player2 hand) = "Player 2 with hand " ++ show hand 
+    show (Player name hand) = "Player " ++ name ++ " with hand " ++ show hand
 
-findWinner :: Player -> Player -> Maybe (Player, String)
-findWinner h1 h2 = Nothing
+data Winner = Winner Player | DrawGame deriving (Eq)
 
+instance Show Winner where
+    show (Winner (Player name hand)) = name ++ " wins with " ++ (show $ handCategory hand)
+    show DrawGame = "Draw game"
+
+findWinner :: Player -> Player -> Winner
+findWinner player1@(Player _ h1) player2@(Player _ h2) 
+    | handCategory h1 > handCategory h2 = Winner player1
+    | handCategory h1 < handCategory h2 = Winner player2
+    | otherwise = DrawGame

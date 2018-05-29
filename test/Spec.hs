@@ -8,26 +8,24 @@ import Rank
 import Card
 import HandGenerator
 
-randomPlayers :: Gen (Player, Player)
-randomPlayers = do
+randomGame :: Gen (Player, Player, Winner)
+randomGame = do
     hand1 <- generateHand
+    let player1 = Player "Player 1" hand1
     hand2 <- generateHandWithout hand1
-    return (Player1 hand1, Player2 hand2)
+    let player2 = Player "Player 2" hand2
+    return (player1, player2, (findWinner player1 player2))
 
-isPlayer1 :: Player -> Bool
-isPlayer1 (Player1 _) = True
-isPlayer1 _ = False 
-
-isVictoryCorrect :: Maybe (Player, String) -> Player -> Player -> Bool
-isVictoryCorrect (Just (player, _)) (Player1 h1) (Player2 h2) = if isPlayer1 player 
-        then handCategory h1 < handCategory h2
-        else handCategory h1 > handCategory h2
-isVictoryCorrect Nothing (Player1 h1) (Player2 h2) = handCategory h1 == handCategory h2
+isVictoryCorrect :: Winner -> Player -> Player -> Bool
+isVictoryCorrect (Winner player) player1@(Player _ h1) player2@(Player _ h2) = if player == player1 
+        then handCategory h1 > handCategory h2
+        else handCategory h1 < handCategory h2
+isVictoryCorrect DrawGame (Player _ h1) (Player _ h2) = handCategory h1 == handCategory h2
 
 prop_shouldGiveCorrectWinner :: Property
 prop_shouldGiveCorrectWinner =
-    forAll randomPlayers
-    (\(player1, player2) -> isVictoryCorrect (findWinner player1 player2) player1 player2)
+    forAll randomGame
+    (\(player1, player2, winner) -> isVictoryCorrect winner player1 player2)
 
 main :: IO ()
 main = hspec $ do
