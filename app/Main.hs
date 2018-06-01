@@ -1,6 +1,6 @@
 module Main where
 
-import HandGenerator
+import Hand
 
 main :: IO ()
-main = someFunc
+main = putStrLn "cool"
