@@ -17,6 +17,12 @@ instance Arbitrary Rank where
 generateSuit :: Gen Suit
 generateSuit = elements allSuits
 
+allEqual :: [Suit] -> Bool 
+allEqual suits = and $ map (== head suits) (tail suits)
+
+generateXDifferentSuits :: Int -> Gen [Suit]
+generateXDifferentSuits x = suchThat (vectorOf x generateSuit) (not . allEqual)
+
 instance Arbitrary Suit where
     arbitrary = generateSuit
 
@@ -49,8 +55,11 @@ generateCardAtSuit suit = do
     return (Card rank suit)
 
 generateXOfAKind :: Int -> Rank -> Gen [Card]
-generateXOfAKind x rank = vectorOf x $ generateCardAtRank rank
+generateXOfAKind x rank = do
+    suits <- generateXDifferentSuits x
+    return (map (Card rank) suits)
 
+generateHighCard :: Gen [Card]
 generateHighCard = suchThat generateHand (\h -> handCategory h == HighCard)
 
 -- could use a recursion or something more complex
@@ -81,22 +90,25 @@ generateThreeOfAKind = do
     r1 <- generateRank
     threeOfAKind <- generateXOfAKind 3 r1
     r2 <- generateRankWithout [r1]
-    c1 <- generateCardAtRank r1
+    c1 <- generateCardAtRank r2
     r3 <- generateRankWithout [r1, r2]
     c2 <- generateCardAtRank r3
     return ([c1, c2] ++ threeOfAKind)
 
 generateStraight :: Gen [Card]
 generateStraight = do
-    suits <- vectorOf 5 $ generateSuit
+    suits <- generateXDifferentSuits 5
     ranks <- elements allPossibleStraights
     return (map (\(r, s) -> Card r s) (zip ranks suits))
     
-generateFlush :: Gen [Card]
-generateFlush = do
+generatePossibleFlush :: Gen [Card]
+generatePossibleFlush = do
     suit <- elements allSuits
     cards <- vectorOf 5 $ generateCardAtSuit suit
     return cards
+    
+generateFlush :: Gen [Card]
+generateFlush = suchThat generatePossibleFlush (\hand -> not $ any ((sort (map rank hand)) ==) allPossibleStraights)
 
 generateFullHouse :: Gen [Card]
 generateFullHouse = do
@@ -131,21 +143,29 @@ randomHandForCategory FullHouse = generateFullHouse
 randomHandForCategory FourOfAKind = generateFourOfAKind
 randomHandForCategory StraightFlush = generateStraightFlush
 
-generateSuperiorHandForFirstPlayer :: Gen (Player, Player)
+generateSuperiorHandForFirstPlayer :: Gen (HandCategory, Player, HandCategory, Player, Winner)
 generateSuperiorHandForFirstPlayer = do
-    category <- elements (enumFrom (toEnum 1))
-    hand1 <- randomHandForCategory category
-    hand2 <- randomHandForCategory (pred category)
-    return (Player "player1" hand1, Player "player2" hand2)
+    player1Category <- elements (enumFrom (toEnum 1))
+    let player2Category = pred player1Category
+    hand1 <- randomHandForCategory player1Category
+    hand2 <- randomHandForCategory player2Category
+    let player1 = Player "player1" hand1
+    let player2 = Player "player2" hand2
+    let gameResult = (findWinner player1 player2)
+    return (player1Category, player1, player2Category, player2, gameResult)
 
 prop_shouldGiveCorrectWinner :: Property
 prop_shouldGiveCorrectWinner =
     forAll generateSuperiorHandForFirstPlayer 
-    (\(player1, player2) -> (findWinner player1 player2) == (Winner player1))
+    (\(player1Category, player1, player2Category, player2, gameResult) -> gameResult == (Winner player1))
 
 main :: IO ()
 main = hspec $ do
-    describe "Poker Special Hand" $ do
+    describe "Using Property Based Testing" $ do
+        it "should give winner the player with the highest poker's hand" $ do
+            quickCheckWith Test.QuickCheck.stdArgs {Test.QuickCheck.maxSuccess = 6000} prop_shouldGiveCorrectWinner
+
+    describe "Poker Special Hand unit tests" $ do
         it "should have four of a kind" $ do
             let hand = parseHand "A♣ A♥ A♦ A♠ T♥"
             findFourOfAKind hand `shouldBe` Just Ace
@@ -178,6 +198,58 @@ main = hspec $ do
             let hand = parseHand "4♥ 5♥ 6♥ 7♥ 8♥"
             findStraightFlush hand `shouldBe` Just (Heart, Four)
             handCategory hand `shouldBe` StraightFlush
-    
-        it "should give winner the player with the highest poker's hand" $ do
-            prop_shouldGiveCorrectWinner
+            
+        it "Comparing two Flush" $ do
+            let player1 = (Player "Player1" (parseHand "9♣ 7♣ J♣ 2♣ K♣"))
+            let player2 = (Player "Player2" (parseHand "6♥ 9♥ T♥ 4♥ 3♥"))
+            findWinner player1 player2 `shouldBe` DrawGame
+            
+        it "Comparing two Straight" $ do
+            let player1 = (Player "Player1" (parseHand "9♦ T♣ J♣ Q♣ K♦"))
+            let player2 = (Player "Player2" (parseHand "8♦ 9♥ T♦ J♥ Q♥"))
+            findWinner player1 player2 `shouldBe` Winner player1
+            
+        it "Comparing two Straight Flush" $ do
+            let player1 = (Player "Player1" (parseHand "9♣ T♣ J♣ Q♣ K♣"))
+            let player2 = (Player "Player2" (parseHand "8♥ 9♥ T♥ J♥ Q♥"))
+            findWinner player1 player2 `shouldBe` Winner player1
+
+        it "Comparing two FullHouse" $ do
+            let player1 = (Player "Player1" (parseHand "A♣ A♥ Q♦ Q♠ Q♥"))
+            let player2 = (Player "Player2" (parseHand "J♣ J♥ Q♦ Q♠ Q♥"))
+            findWinner player1 player2 `shouldBe` Winner player1
+            let player2 = (Player "Player2" (parseHand "J♣ J♥ K♦ K♠ K♥"))
+            findWinner player1 player2 `shouldBe` Winner player2
+
+        it "Comparing to High Card" $ do
+            let player1 = (Player "Player1" (parseHand "3♣ 5♦ 6♥ A♥ J♥"))
+            let player2 = (Player "Player2" (parseHand "5♠ 9♣ 5♥ J♠ K♦"))
+            findWinner player1 player2 `shouldBe` Winner player1
+
+        it "Comparing to Four of a Kind" $ do
+            let player1 = (Player "Player1" (parseHand "3♥ K♦ K♦ K♣ K♠"))
+            let player2 = (Player "Player2" (parseHand "A♦ T♦ T♥ T♥ T♦"))
+            findWinner player1 player2 `shouldBe` Winner player1
+            let player2 = (Player "Player2" (parseHand "A♦ K♦ K♦ K♣ K♠"))
+            findWinner player1 player2 `shouldBe` Winner player2
+
+        it "Comparing to Three of a Kind" $ do
+            let player1 = (Player "Player1" (parseHand "3♥ 7♦ K♦ K♣ K♠"))
+            let player2 = (Player "Player2" (parseHand "3♦ 8♦ T♥ T♥ T♦"))
+            findWinner player1 player2 `shouldBe` Winner player1
+            let player2 = (Player "Player2" (parseHand "3♦ 8♦ K♦ K♣ K♠"))
+            findWinner player1 player2 `shouldBe` Winner player2
+
+        it "Comparing to One Pair" $ do
+            let player1 = (Player "Player1" (parseHand "3♥ 7♦ 4♦ K♣ K♠"))
+            let player2 = (Player "Player2" (parseHand "3♦ 8♦ 6♥ T♥ T♦"))
+            findWinner player1 player2 `shouldBe` Winner player1
+            let player2 = (Player "Player2" (parseHand "3♦ 8♦ 6♦ K♣ K♠"))
+            findWinner player1 player2 `shouldBe` Winner player2
+
+        it "Comparing to Two Pair" $ do
+            let player1 = (Player "Player1" (parseHand "3♦ Q♥ Q♦ K♣ K♠"))
+            let player2 = (Player "Player2" (parseHand "4♦ 8♣ 8♠ K♥ K♦"))
+            findWinner player1 player2 `shouldBe` Winner player1
+            let player2 = (Player "Player2" (parseHand "4♦ Q♣ Q♠ K♥ K♦"))
+            findWinner player1 player2 `shouldBe` Winner player2
